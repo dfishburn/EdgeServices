@@ -1,0 +1,111 @@
+# vim: ff=unix ft=ruby nu: expandtab: tw=0
+
+$script = <<-SCRIPT
+export DEBIAN_FRONTEND=noninteractive #prevent prompts while installing upgrades
+apt-get update 
+apt-get upgrade -y 
+apt-get install -y curl git net-tools openjdk-8-jdk tree vim 
+
+#docker
+apt-get update 
+apt-get install -y apt-transport-https ca-certificates curl software-properties-common 
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
+add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu bionic stable"
+apt-get update 
+apt-cache policy docker-ce 
+apt-get install -y docker-ce=18.06.1~ce~3-0~ubuntu
+systemctl enable docker
+
+# #minukube
+# curl -Lo minikube https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64 && chmod +x minikube && cp minikube /usr/local/bin/ && rm minikube
+# curl -Lo kubectl https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl && chmod +x kubectl && cp kubectl /usr/local/bin/ && rm kubectl
+# 
+# echo "#!/bin/bash" > ~/launch_minikube.sh
+# echo "" >> ~/launch_minikube.sh
+# 
+# echo "export MINIKUBE_WANTUPDATENOTIFICATION=false" >> ~/launch_minikube.sh
+# echo "export MINIKUBE_WANTREPORTERRORPROMPT=false" >> ~/launch_minikube.sh
+# echo "export MINIKUBE_HOME=$HOME" >> ~/launch_minikube.sh
+# echo "export MINIKUBE_HOME=$HOME" >> ~/launch_minikube.sh
+# echo "export CHANGE_MINIKUBE_NONE_USER=true" >> ~/launch_minikube.sh
+# echo "mkdir -p $HOME/.kube" >> ~/launch_minikube.sh
+# echo "mkdir -p $HOME/.minikube" >> ~/launch_minikube.sh
+# echo "touch $HOME/.kube/config" >> ~/launch_minikube.sh
+# echo "" >> ~/launch_minikube.sh
+# 
+# echo "export KUBECONFIG=$HOME/.kube/config" >> ~/launch_minikube.sh
+# echo "sudo -E minikube start --vm-driver=none" >> ~/launch_minikube.sh
+# echo "" >> ~/launch_minikube.sh
+# 
+# echo "# this for loop waits until kubectl can access the api server that Minikube has created" >> ~/launch_minikube.sh
+# echo "for i in {1..150}; do # timeout for 5 minutes" >> ~/launch_minikube.sh
+# echo "   kubectl get po &> /dev/null" >> ~/launch_minikube.sh
+# echo "   if [ $? -ne 1 ]; then" >> ~/launch_minikube.sh
+# echo "      break" >> ~/launch_minikube.sh
+# echo "  fi" >> ~/launch_minikube.sh
+# echo "  sleep 2" >> ~/launch_minikube.sh
+# echo "done" >> ~/launch_minikube.sh
+# echo "" >> ~/launch_minikube.sh
+# chmod +x ~/launch_minikube.sh
+# mv -vi ~/launch_minikube.sh /usr/local/bin/
+
+#clean up
+apt-get -y clean && apt-get -y autoremove
+ip addr
+SCRIPT
+
+$user = <<-SCRIPT
+mkdir -p /opt/downloads/
+chmod 777 /opt/downloads
+echo "#!/bin/bash" > /opt/downloads/home_dir_config.sh
+echo "" >> /opt/downloads/home_dir_config.sh 
+
+echo "cd ~" >> /opt/downloads/home_dir_config.sh 
+echo "git init" >> /opt/downloads/home_dir_config.sh 
+echo "git config http.sslverify false" >> /opt/downloads/home_dir_config.sh 
+echo "git remote add origin https://github.com/dfishburn/homedir.git" >> /opt/downloads/home_dir_config.sh 
+echo "#if authorized_keys file exists, then save it to prevent overwritting " >> /opt/downloads/home_dir_config.sh 
+echo "if [ -e .ssh/authorized_keys ]; then" >> /opt/downloads/home_dir_config.sh 
+echo "    mv -v .ssh/authorized_keys .ssh/authorized_keys.save" >> /opt/downloads/home_dir_config.sh 
+echo "fi" >> /opt/downloads/home_dir_config.sh 
+echo "git pull origin master" >> /opt/downloads/home_dir_config.sh 
+echo "git branch --set-upstream-to=origin/master" >> /opt/downloads/home_dir_config.sh 
+echo "#if we saved a authorized_keys file, then restore it after appending our keys" >> /opt/downloads/home_dir_config.sh 
+echo "if [ -e .ssh/authorized_keys.save ]; then" >> /opt/downloads/home_dir_config.sh 
+echo "    cat .ssh/authorized_keys >> .ssh/authorized_keys.save" >> /opt/downloads/home_dir_config.sh 
+echo "    mv -v .ssh/authorized_keys.save .ssh/authorized_keys" >> /opt/downloads/home_dir_config.sh 
+echo "fi" >> /opt/downloads/home_dir_config.sh 
+echo "" >> /opt/downloads/home_dir_config.sh 
+echo "ls -l ~" >> /opt/downloads/home_dir_config.sh 
+echo "ls -l .ssh" >> /opt/downloads/home_dir_config.sh 
+echo "" >> /opt/downloads/home_dir_config.sh 
+chmod +x /opt/downloads/home_dir_config.sh
+
+#set up home directory for root user
+/opt/downloads/home_dir_config.sh
+
+su vagrant -c /opt/downloads/home_dir_config.sh
+
+useradd -m -s /bin/bash -G vagrant,root,adm,sudo,sambashare,docker,cdrom fishburn
+su fishburn -c /opt/downloads/home_dir_config.sh
+SCRIPT
+
+
+
+Vagrant.configure("2") do |config|
+    config.vm.box = "bento/ubuntu-18.04"
+    config.vm.hostname = "ubuntu_dev"
+    config.vm.network :public_network, bridge: "Default Switch"
+    config.vm.network :private_network, ip: "192.168.99.20", :netmask => "255.255.255.0", bridge: "DockerNAT"
+    config.vm.provider "hyperv" do |h|
+        h.cpus = 1
+        h.memory = 2048
+        h.vm_integration_services = {
+            guest_service_interface: true,
+            time_synchronization: true
+        }
+    end
+    config.vm.provision "shell", inline: $script
+    config.vm.provision "shell", inline: $user
+end
+

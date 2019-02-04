@@ -86,7 +86,7 @@ chmod +x /opt/downloads/home_dir_config.sh
 
 su vagrant -c /opt/downloads/home_dir_config.sh
 
-useradd -m -s /bin/bash -G vagrant,root,adm,sudo,sambashare,docker,cdrom fishburn
+useradd -m -s /bin/bash -G vagrant,root,adm,sudo,sambashare,docker,cdrom,fishburn
 su fishburn -c /opt/downloads/home_dir_config.sh
 SCRIPT
 
